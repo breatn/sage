@@ -1218,66 +1218,91 @@ cdef class LaurentPolynomial_mpair(LaurentPolynomial):
         return [a.eadd(self._mon) for a in self._poly.exponents()]
 
     def degree(self, x=None):
-        r"""
-        Return the degree of ``self``.
+          r"""
+          Return the degree of ``self``.
 
-        INPUT:
+          INPUT:
+  
+          - ``x`` -- (default: ``None``) a generator of the parent ring
 
-        - ``x`` -- (default: ``None``) a generator of the parent ring
+          OUTPUT:
 
-        OUTPUT:
+          If ``x`` is ``None``, return the total degree of ``self``.
+          If ``x`` is a given generator of the parent ring,
+          the output is the maximum degree of ``x`` in ``self``.
 
-        If ``x`` is ``None``, return the total degree of ``self``.
-        If ``x`` is a given generator of the parent ring,
-        the output is the maximum degree of ``x`` in ``self``.
+          EXAMPLES::
 
-        EXAMPLES::
+              sage: R.<x,y,z> = LaurentPolynomialRing(QQ)
+              sage: f = 4*x^7*z^-1 + 3*x^3*y + 2*x^4*z^-2 + x^6*y^-7
+              sage: f.degree()
+              6
+              sage: f.degree(x)
+              7
+              sage: f.degree(y)
+              1
+              sage: f.degree(z)
+              0
 
-            sage: R.<x,y,z> = LaurentPolynomialRing(QQ)
-            sage: f = 4*x^7*z^-1 + 3*x^3*y + 2*x^4*z^-2 + x^6*y^-7
-            sage: f.degree()
-            6
-            sage: f.degree(x)
-            7
-            sage: f.degree(y)
-            1
-            sage: f.degree(z)
-            0
+          The zero polynomial is defined to have degree `-\infty`::
 
-        The zero polynomial is defined to have degree `-\infty`::
+              sage: R.<x, y, z> = LaurentPolynomialRing(ZZ)
+              sage: R.zero().degree()
+              -Infinity
+              sage: R.zero().degree(x)
+              -Infinity
+              sage: R.zero().degree(x) == R.zero().degree(y) == R.zero().degree(z)
+              True
 
-            sage: R.<x, y, z> = LaurentPolynomialRing(ZZ)
-            sage: R.zero().degree()
-            -Infinity
-            sage: R.zero().degree(x)
-            -Infinity
-            sage: R.zero().degree(x) == R.zero().degree(y) == R.zero().degree(z)
-            True
+          The weights of a weighted term order are taken into account, also
+          for negative exponents (:issue:`37568`)::
 
-        TESTS::
+              sage: R.<x, y> = LaurentPolynomialRing(ZZ, order=TermOrder('wdegrevlex', [1, 3]))
+              sage: R(x).degree()
+              1
+              sage: R(y).degree()
+              3
+              sage: R(1/x).degree()
+              -1
+              sage: R(1/y).degree()
+              -3
+              sage: (x^2 * y^-1).degree()
+              -1
 
-            sage: R.<x, y, z> = LaurentPolynomialRing(ZZ)
-            sage: f = x + y + z
-            sage: f.degree(1)
-            Traceback (most recent call last):
-            ...
-            TypeError: 1 is not a generator of parent
-        """
-        # The zero polynomial is defined to have degree -Infinity
-        if self.is_zero():
-            return minus_infinity
+          Unweighted term orders are unaffected::
 
-        if x is None:
-            return self._poly.total_degree() + sum(self._mon)
+              sage: R.<a, b> = LaurentPolynomialRing(ZZ)
+              sage: (a^2 * b^-1).degree()
+              1
 
-        # Get the index of the generator or error
-        cdef tuple g = <tuple > self._parent.gens()
-        cdef Py_ssize_t i
-        try:
-            i = g.index(x)
-        except ValueError:  # not in the tuple
-            raise TypeError(f"{x} is not a generator of parent")
-        return self._poly.degree(self._parent._R.gens()[i]) + self._mon[i]
+          TESTS::
+
+              sage: R.<x, y, z> = LaurentPolynomialRing(ZZ)
+              sage: f = x + y + z
+              sage: f.degree(1)
+              Traceback (most recent call last):
+              ...
+              TypeError: 1 is not a generator of parent
+          """
+          # The zero polynomial is defined to have degree -Infinity
+          if self.is_zero():
+              return minus_infinity
+
+          if x is None:
+              w = self._parent.term_order().weights()
+              if w is None:
+                  return self._poly.total_degree() + sum(self._mon)
+              return self._poly.total_degree() + sum(wi * mi for wi, mi
+                                                     in zip(w, self._mon))
+
+          # Get the index of the generator or error
+          cdef tuple g = <tuple > self._parent.gens()
+          cdef Py_ssize_t i
+          try:
+              i = g.index(x)
+          except ValueError:  # not in the tuple
+              raise TypeError(f"{x} is not a generator of parent")
+          return self._poly.degree(self._parent._R.gens()[i]) + self._mon[i]
 
     def valuation(self, x=None):
         r"""
